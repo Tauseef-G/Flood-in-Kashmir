@@ -1,0 +1,72 @@
+
+// Make a cloud-free Landsat 8 TOA composite (from raw imagery).
+var l5= ee.ImageCollection('LANDSAT/LT05/C01/T1');
+
+var image = ee.Algorithms.Landsat.simpleComposite({
+  collection: l5.filterDate('2011-08-01', '2011-08-30'),
+  asFloat: true
+});
+
+// Use these bands for prediction.
+var bands = ['B2', 'B3', 'B4', 'B5', 'B6', 'B7'];
+
+
+
+
+// Make a FeatureCollection from the hand-made geometries.
+var polygons = ee.FeatureCollection([
+  ee.Feature(Builtup, {'class': 0}),
+  ee.Feature(CropLand, {'class': 1}),
+  ee.Feature(AgriculturePlantation, {'class': 2}),
+  ee.Feature(AquaticVegetation, {'class': 3}),
+   ee.Feature(EvergreenoORSemiEverygreenForest, {'class': 4}),
+    ee.Feature(ScrubForest, {'class': 5}),
+     ee.Feature(GrassAndGrazingLand, {'class': 6}),
+      ee.Feature(BarrenUncluturedWasteland, {'class': 7}),
+       ee.Feature(WaterBodies, {'class': 8}),
+        ee.Feature(GLacier, {'class': 9}),
+         ]);
+
+// Get the values for all pixels in each polygon in the training.
+var training = image.sampleRegions({
+  // Get the sample from the polygons FeatureCollection.
+  collection: polygons,
+  // Keep this list of properties from the polygons.
+  properties: ['class'],
+  // Set the scale to get Landsat pixels in the polygons.
+  scale: 30
+});
+
+// Create an SVM classifier with custom parameters.
+var classifier = ee.Classifier.libsvm({
+  kernelType: 'RBF',
+  gamma: 0.5,
+  cost: 10
+});
+
+// Train the classifier.
+var trained = classifier.train(training, 'class', bands);
+
+// Classify the image.
+var classified = image.classify(trained).clip(roi);
+
+// Define a palette for the Land Use classification
+var palette = [
+  'cc0013',//Builtup
+  'cdb33b', // croplands
+  '30eb5b',//AgriculturePlantation
+  '369b47',// AquaticVegetation
+  '152106',//EvergreenoORSemiEverygreenForest
+  '91af40',//ScrubForest
+  'c3aa69',//GrassAndGrazingLand
+'f7e084',// BarrenUncluturedWasteland
+  'aec3d4', //WaterBodies
+  'd7cdcc', // GLacierandSNow
+];
+
+// Display the classification result and the input image.
+
+
+
+Map.addLayer(polygons, {}, 'training polygons');
+Map.addLayer(classified,{min: 0, max: 2, palette: palette}, 'Land Use Classification');
